@@ -2328,7 +2328,7 @@ class Room2D(_BaseGeometry):
         self._re_center_windows(original_segs)
 
     def pull_to_segments(self, line_segments, distance, snap_vertices=True,
-                         constrain_edges=False, tolerance=0.01):
+                         constrain_edges=False, tolerance=0.01, region=None):
         """Pull this Room2D's vertices to several LineSegment2D.
 
         This includes both an alignment to the line segments as well as an optional
@@ -2364,7 +2364,16 @@ class Room2D(_BaseGeometry):
             tolerance: The minimum difference between the coordinate values at
                 which they are considered co-located. (Default: 0.01,
                 suitable for objects in meters).
+            region: A Polygon2D representing the region within which the Room2D
+                vertices should be aligned. If None, the alignment will be performed
+                for the entire Room2D. (Default: None).
         """
+        # validate the region argument if provided
+        if region is not None:
+            if not isinstance(region, Polygon2D):
+                msg = 'Expected Polygon2D. Got {}.'.format(type(region))
+                raise TypeError(msg)
+
         # create a 3D version of the relevant line segments
         lines_3d = []
         for line in line_segments:
@@ -2389,14 +2398,19 @@ class Room2D(_BaseGeometry):
         # loop through the Room2D vertices and align them to the segments
         new_boundary = []
         for pt in edit_boundary:
-            dists, c_pts = [], []
-            for line_ray_3d in lines_3d:
-                close_pt = closest_point3d_on_line3d(pt, line_ray_3d)
-                c_pts.append(close_pt)
-                dists.append(pt.distance_to_point(close_pt))
-            sort_pt = sorted(zip(dists, c_pts), key=lambda pair: pair[0])
-            if sort_pt[0][0] <= distance:
-                new_boundary.append(sort_pt[0][1])
+            in_reg = region is None or \
+                region.point_relationship(Point2D(pt.x, pt.y), tolerance) >= 0
+            if in_reg:
+                dists, c_pts = [], []
+                for line_ray_3d in lines_3d:
+                    close_pt = closest_point3d_on_line3d(pt, line_ray_3d)
+                    c_pts.append(close_pt)
+                    dists.append(pt.distance_to_point(close_pt))
+                sort_pt = sorted(zip(dists, c_pts), key=lambda pair: pair[0])
+                if sort_pt[0][0] <= distance:
+                    new_boundary.append(sort_pt[0][1])
+                else:
+                    new_boundary.append(pt)
             else:
                 new_boundary.append(pt)
         edit_boundary = new_boundary
@@ -2405,14 +2419,19 @@ class Room2D(_BaseGeometry):
             for hole in edit_holes:
                 new_hole = []
                 for pt in hole:
-                    dists, c_pts = [], []
-                    for line_ray_3d in lines_3d:
-                        close_pt = closest_point3d_on_line3d(pt, line_ray_3d)
-                        c_pts.append(close_pt)
-                        dists.append(pt.distance_to_point(close_pt))
-                    sort_pt = sorted(zip(dists, c_pts), key=lambda pair: pair[0])
-                    if sort_pt[0][0] <= distance:
-                        new_hole.append(sort_pt[0][1])
+                    in_reg = region is None or \
+                        region.point_relationship(Point2D(pt.x, pt.y), tolerance) >= 0
+                    if in_reg:
+                        dists, c_pts = [], []
+                        for line_ray_3d in lines_3d:
+                            close_pt = closest_point3d_on_line3d(pt, line_ray_3d)
+                            c_pts.append(close_pt)
+                            dists.append(pt.distance_to_point(close_pt))
+                        sort_pt = sorted(zip(dists, c_pts), key=lambda pair: pair[0])
+                        if sort_pt[0][0] <= distance:
+                            new_hole.append(sort_pt[0][1])
+                        else:
+                            new_hole.append(pt)
                     else:
                         new_hole.append(pt)
                 new_holes.append(new_hole)
@@ -2426,10 +2445,15 @@ class Room2D(_BaseGeometry):
                 vertices.append(line.p2)
             new_boundary = []
             for pt in edit_boundary:
-                dists = [pt.distance_to_point(pt_3d) for pt_3d in vertices]
-                sort_pt = sorted(zip(dists, vertices), key=lambda pair: pair[0])
-                if sort_pt[0][0] <= distance:
-                    new_boundary.append(sort_pt[0][1])
+                in_reg = region is None or \
+                    region.point_relationship(Point2D(pt.x, pt.y), tolerance) >= 0
+                if in_reg:
+                    dists = [pt.distance_to_point(pt_3d) for pt_3d in vertices]
+                    sort_pt = sorted(zip(dists, vertices), key=lambda pair: pair[0])
+                    if sort_pt[0][0] <= distance:
+                        new_boundary.append(sort_pt[0][1])
+                    else:
+                        new_boundary.append(pt)
                 else:
                     new_boundary.append(pt)
             edit_boundary = new_boundary
@@ -2438,10 +2462,15 @@ class Room2D(_BaseGeometry):
                 for hole in edit_holes:
                     new_hole = []
                     for pt in hole:
-                        dists = [pt.distance_to_point(pt_3d) for pt_3d in vertices]
-                        sort_pt = sorted(zip(dists, vertices), key=lambda pair: pair[0])
-                        if sort_pt[0][0] <= distance:
-                            new_hole.append(sort_pt[0][1])
+                        in_reg = region is None or \
+                            region.point_relationship(Point2D(pt.x, pt.y), tolerance) >= 0
+                        if in_reg:
+                            dists = [pt.distance_to_point(pt_3d) for pt_3d in vertices]
+                            sort_pt = sorted(zip(dists, vertices), key=lambda pair: pair[0])
+                            if sort_pt[0][0] <= distance:
+                                new_hole.append(sort_pt[0][1])
+                            else:
+                                new_hole.append(pt)
                         else:
                             new_hole.append(pt)
                     new_holes.append(new_hole)
